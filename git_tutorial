@@ -1,0 +1,11 @@
+add file
+mod +x file_name  #file execute mode
+git add file_name  #add git tracked
+git status #check git status
+git commit -m "message"  #commit
+git push  #upload file to github
+---------------------------------
+remove file
+git rm file_name #remove git tracked
+--------------------------------
+git remote -v #check remote status
