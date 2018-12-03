@@ -1,5 +1,5 @@
 add file
-mod +x file_name  #file execute mode
+chmod +x file_name  #file execute mode
 git add file_name  #add git tracked
 git status #check git status
 git commit -m "message"  #commit
