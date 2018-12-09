@@ -15,7 +15,7 @@ from torch.autograd import Variable
 #print(torch.cuda.device_count())
 #print(torch.cuda.get_device_name(0))
 #print(torch.cuda.current_device())
-##################################
+##################################3###########
 
 ## Load img&label array   
 with open('/home/desktop/thesis/ls_ilabel.pkl','rb') as file:
@@ -42,8 +42,14 @@ x_train, x_test, y_train, y_test = train_test_split(x, y, test_size = 0.2)
 #print(y_train.shape)
 #print(y_test.shape)
 
+##############################################
+## Hyper Parameters
+Batch_size = 16
+learning_rate = 1e-4
+num_epoch = 10
 
-##  Dataset Class
+
+##  Dataset
 class ecg_dataset(Dataset):
     def __init__(self,x,y,transform=None):   #initial processes,reading data
       super(ecg_dataset, self).__init__()
@@ -58,13 +64,7 @@ class ecg_dataset(Dataset):
     def __len__(self):   #return the data length
       return len(self.x)
 
-
-Batch_size = 16
-learning_rate = 1e-4
-num_epoch = 10
-
-
-# creat DataLoader
+## DataLoader
 tr_dataset = ecg_dataset(x_train,y_train)
 ts_dataset = ecg_dataset(x_test,y_test)
 tr_dataloader = DataLoader(tr_dataset, Batch_size, shuffle=True)
@@ -73,7 +73,7 @@ ts_dataloader = DataLoader(ts_dataset, Batch_size, shuffle=False)
 #print(next(iter(ts_dataloader)))
 
 
-# Define Training  Model
+# Define  Model
 class CNN_model(torch.nn.Module):
 	def __init__ (self):
 		super(CNN_model, self).__init__()
@@ -115,12 +115,12 @@ else:
 
 #print(model)
 
+## Loss Function & Optimization
 criterion = torch.nn.CrossEntropyLoss()
-#criterion = torch.nn.NLLLoss()
 #optimizer = torch.optim.SGD(model.parameters(), lr=1e-4, momentum = 0.9) 
 optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate) 
 
-
+## Training Model
 tr_loss = 0.0
 tr_correct = 0
 print("\nTrainging Model...")
