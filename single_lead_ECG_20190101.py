@@ -8,8 +8,11 @@ from torchvision import transforms
 import matplotlib.pyplot as plt
 import torch.nn as nn
 import torch.nn.functional as F
-from sklearn.model_selection import train_test_split
+#from sklearn.model_selection import train_test_split
+from sklearn.model_selection import KFold
 from torch.autograd import Variable
+from biosppy.signals import ecg
+
 
 #print(torch.cuda.is_available())
 #print(torch.cuda.device_count())
@@ -29,25 +32,32 @@ np_img = np.load('/home/desktop/thesis/patient_lead.npy')
 #print(np.unique(np_label))
 #print(np_img.shape)             #(2540,1,12,5000)
 #print(np_img[-1])
+#print(len(np_label))
+#print(list(np_label).count(0))
 
 ## Split dataset
 x = np_img
 y = np_label
+#x_train, x_test, y_train, y_test = train_test_split(x, y, test_size = 0.2)
 
-np.random.seed(0)
-x_train, x_test, y_train, y_test = train_test_split(x, y, test_size = 0.2)
+
+#np.random.seed(0)
+kf = KFold(n_splits=5)
+for train_index, test_index in kf.split(x):
+        #print("Trian:",train_index ,"Test:",test_index)
+        x_train ,x_test = x[train_index],x[test_index]
+        y_train ,y_test = y[train_index],y[test_index]
 
 #print(x_train.shape)         #(2032,1,12,5000)
 #print(x_test.shape)          #(508,1,12,5000)
 #print(y_train.shape)         #(2032,)
-#print(y_test.shape)	     #(508,)
+#print(y_test.shape)	      #(508,)
 
 ##############################################
 ## Hyper Parameters
-Batch_size = 16
+Batch_size = 32
 learning_rate = 1e-4
 num_epoch = 20
-
 
 ##  Dataset
 class ecg_dataset(Dataset):
@@ -67,6 +77,7 @@ tr_dataset = ecg_dataset(x_train,y_train)
 ts_dataset = ecg_dataset(x_test,y_test)
 tr_dataloader = DataLoader(tr_dataset, Batch_size, shuffle=True)
 ts_dataloader = DataLoader(ts_dataset, Batch_size, shuffle=False)
+
 #print(tr_dataset.__len__())
 #print(len(ts_dataset))
 #print(next(iter(tr_dataloader)))
@@ -74,63 +85,64 @@ ts_dataloader = DataLoader(ts_dataset, Batch_size, shuffle=False)
 
 # Define  Model
 class CNN_model(torch.nn.Module):
-	def __init__ (self):
-		super(CNN_model, self).__init__()
-		self.conv1 = nn.Sequential(
-			nn.Conv2d(in_channels=1,out_channels=16 ,kernel_size=3 , stride=1 ,padding=1),
-			nn.BatchNorm2d(16),
-			nn.ReLU(),
-			nn.Conv2d(in_channels=16,out_channels=16 ,kernel_size=3 , stride=1 ,padding=1),		
-			nn.ReLU(),
-			nn.MaxPool2d(kernel_size=2, stride=2))
-		self.conv2 = nn.Sequential(
-                        nn.Conv2d(in_channels=16,out_channels=32 ,kernel_size=3 , stride=1 ,padding=1),
-			nn.BatchNorm2d(32),
-			nn.ReLU(),
-                        nn.Conv2d(in_channels=32,out_channels=32 ,kernel_size=3 , stride=1 ,padding=1),
-                        nn.ReLU(),
-                        nn.MaxPool2d(kernel_size=2, stride=2))
-		self.conv3 = nn.Sequential(
-                        nn.Conv2d(in_channels=32,out_channels=64 ,kernel_size=3 , stride=1 ,padding=1),
-                        nn.BatchNorm2d(64),
-			nn.ReLU(),
-                        #nn.Conv2d(in_channels=64,out_channels=64 ,kernel_size=3 , stride=1 ,padding=1),
-                       	#nn.ReLU(),
-                        #nn.Conv2d(in_channels=64,out_channels=64 ,kernel_size=3 , stride=1 ,padding=1),
-                        #nn.ReLU(),
-                        nn.MaxPool2d(kernel_size=2, stride=2))
-			
-#                       nn.Conv2d(in_channels=256,out_channels=512 ,kernel_size=3 , stride=1 ,padding=1),
-#                       nn.ReLU(),
-#                       nn.Conv2d(in_channels=512,out_channels=512,kernel_size=3 , stride=1 ,padding=1),
-#                       nn.ReLU(),
-#                       nn.Conv2d(in_channels=512,out_channels=512,kernel_size=3 , stride=1 ,padding=1),
-#                       nn.ReLU(),
-#                       nn.MaxPool2d(kernel_size=2, stride=2))
+    def __init__ (self):
+        super(CNN_model, self).__init__()
+        self.conv1 = nn.Sequential(
+		nn.Conv2d(in_channels=1,out_channels=16 ,kernel_size=3 , stride=1 ,padding=1),
+		nn.BatchNorm2d(16),
+		nn.ReLU(),
+		nn.Conv2d(in_channels=16,out_channels=16 ,kernel_size=3 , stride=1 ,padding=1),		
+		nn.ReLU(),
+		nn.MaxPool2d(kernel_size=2, stride=2))
+        self.conv2 = nn.Sequential(
+                nn.Conv2d(in_channels=16,out_channels=32 ,kernel_size=3 , stride=1 ,padding=1),
+                nn.BatchNorm2d(32),
+                nn.ReLU(),
+                nn.Conv2d(in_channels=32,out_channels=32 ,kernel_size=3 , stride=1 ,padding=1),
+                nn.ReLU(),
+                nn.MaxPool2d(kernel_size=2, stride=2))
+        self.conv3 = nn.Sequential(
+                nn.Conv2d(in_channels=32,out_channels=64 ,kernel_size=3 , stride=1 ,padding=1),
+                nn.BatchNorm2d(64),
+                nn.ReLU(),
+                nn.Conv2d(in_channels=64,out_channels=64 ,kernel_size=3 , stride=1 ,padding=1),
+                nn.ReLU(),
+                nn.Conv2d(in_channels=64,out_channels=64 ,kernel_size=3 , stride=1 ,padding=1),
+                nn.ReLU(),
+                nn.MaxPool2d(kernel_size=2, stride=2))
+#        self.conv4 = nn.Sequential(
+#                nn.Conv2d(in_channels=256,out_channels=512 ,kernel_size=3 , stride=1 ,padding=1),
+#                nn.ReLU(),
+#                nn.Conv2d(in_channels=512,out_channels=512,kernel_size=3 , stride=1 ,padding=1),
+#                nn.ReLU(),
+#                nn.Conv2d(in_channels=512,out_channels=512,kernel_size=3 , stride=1 ,padding=1),
+#                nn.ReLU(),
+#                nn.MaxPool2d(kernel_size=2, stride=2))
 		
-		self.dense = torch.nn.Sequential(
-			nn.Linear(40000,2))
-			#nn.ReLU(),
-			#nn.Dropout(p=0.5),
-			#nn.Linear(1024,1024),
-			#nn.ReLU(),
-			#nn.Dropout(p=0.5),
-			#nn.Linear(1024,2))
+        self.dense = torch.nn.Sequential(nn.Linear(40000,2))
+#		nn.ReLU(),
+#		nn.Dropout(p=0.5),
+#		nn.Linear(1024,1024),3
+#               nn.ReLU(),
+#		nn.Dropout(p=0.5),
+#		nn.Linear(1024,2))
 			
-	def forward(self, x):
-#		print(x.shape)
-		x = self.conv1(x)
-#		print(x.shape)
-		x = self.conv2(x)
-#		print(x.shape)
-		x = self.conv3(x)
-#		print(x.shape)
-		#fc_input = x.view(x.size(0),-1)  #reshape tensor
-		fc_input = x.view(-1,40000)  #reshape tensor
-#		print(fc_input.shape)
-		fc_output = self.dense(fc_input)
-#		print(fc_output.shape)
-		return fc_output
+    def forward(self, x):
+#        print(x.shape)
+        x = self.conv1(x)
+#        print(x.shape)
+        x = self.conv2(x)
+#        print(x.shape)  
+        x = self.conv3(x)
+#        print(x.shape)
+#       x = self.conv4(x)
+#       print(x.shape)
+        #fc_input = x.view(x.size(0),-1)  #reshape tensor
+        fc_input = x.view(-1,40000)  #reshape tensor
+#        print(fc_input.shape)
+        fc_output = self.dense(fc_input)
+#        print(fc_output.shape)
+        return fc_output
 
 if torch.cuda.is_available():
 	model = CNN_model().cuda()
@@ -169,18 +181,9 @@ for epoch in range(num_epoch):
 		optimizer.zero_grad()
 		loss.backward()
 		optimizer.step()	
-
-		#print(pred)
-		#print(target)
-		#print(pred == target)
-		#print(torch.sum(pred == target))
 		#tr_loss += loss.item()
 		tr_total += len(x_train)
 		tr_correct += torch.sum(pred == target)
-		#print(torch.sum(pred == target))
-		#print(pred)
-		#print(target)
-		
 		
 #	if (epoch+1) %2 == 0:
 #		print("Epoch:{}/{}".format(epoch+1,num_epoch))
@@ -208,7 +211,6 @@ for i,x_test,y_test in ts_dataloader:
 
 	out = model(input)
 	loss = criterion(out,target)
-
 #	print(out.data)
 	_,pred = torch.max(out.data,1)
 #	print(pred)
