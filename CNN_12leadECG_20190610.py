@@ -8,6 +8,7 @@ from torchvision import transforms
 import matplotlib.pyplot as plt
 import torch.nn as nn
 import torch.nn.functional as F
+import random
 from sklearn.model_selection import KFold
 from sklearn.model_selection import train_test_split
 from torch.autograd import Variable
@@ -27,7 +28,8 @@ np_label = np.array(label_f)
 
 np_img = np.load('/home/desktop/thesis/patient_lead.npy')
 
-#print(np_label[-1])
+print(np_img)
+print(np_label)
 #print(np_label.shape)           #(2540,)
 #print(np.unique(np_label))
 #print(np_img.shape)             #(2540,1,12,5000)
@@ -35,14 +37,34 @@ np_img = np.load('/home/desktop/thesis/patient_lead.npy')
 #print(len(np_label))
 #print(list(np_label).count(0))
 
+'''
+def shuffle_in_unision(x, y):
+        assert len(x) == len (y)
+        shuffled_x = np.empty(x.shape, dtype = y.dtype)
+        shuffled_y = np.empty(y.shape, dtype = y.dtype)
+        permutation = np.random.permutation(len(x))
+        for old_index, new_index in enumerate(permutation):
+                shuffled_x[new_index] = x[old_index]
+                shuffled_y[new_index] = y[old_index]
+        return shuffled_x, shuffled_y
+'''
+
 ## Split dataset
 x = np_img
 y = np_label
 
 np.random.seed(7)
+s = np.arange(x.shape[0])
+np.random.shuffle(s)
+x = x[s]
+y = y[s]
+
+#print(x)
+#print(y)
+
 #x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.3)
-#print(x_train, y_train)
-#print(x_test, y_test)
+#print("x_train = ", x_train)
+#print("y_train = ", y_train)
 
 kf = KFold(n_splits=10)
 #
@@ -56,12 +78,11 @@ for train_index, test_index in kf.split(x):
 #print(y_train.shape)         #(1778,)
 #print(y_test.shape)          #(762,)
 
-#exit()
 ##################################################################
 ## Hyper Parameters
-Batch_size = 32
-learning_rate = 1e-4
-num_epoch = 100
+Batch_size = 100
+learning_rate = 0.001
+num_epoch = 20
 
 ##  Dataset
 class ecg_dataset(Dataset):
@@ -79,8 +100,9 @@ class ecg_dataset(Dataset):
 ## DataLoader
 tr_dataset = ecg_dataset(x_train,y_train)
 ts_dataset = ecg_dataset(x_test,y_test)
-tr_dataloader = DataLoader(tr_dataset, Batch_size, shuffle=True)
-ts_dataloader = DataLoader(ts_dataset, Batch_size, shuffle=False)
+
+
+
 
 #print(tr_dataset.__len__())
 #print(len(ts_dataset))
@@ -95,24 +117,24 @@ class CNN(torch.nn.Module):
                 nn.Conv2d(in_channels=1,out_channels=16 ,kernel_size=3 , stride=1 ,padding=1),
                 #nn.BatchNorm2d(16),
                 nn.ReLU(),
-                nn.Conv2d(in_channels=16,out_channels=16 ,kernel_size=3 , stride=1 ,padding=1),
-                nn.ReLU(),
+                #nn.Conv2d(in_channels=16,out_channels=16 ,kernel_size=3 , stride=1 ,padding=1),
+                #nn.ReLU(),
                 nn.MaxPool2d(kernel_size=2, stride=2))
         self.conv2 = nn.Sequential(
                 nn.Conv2d(in_channels=16,out_channels=32 ,kernel_size=3 , stride=1 ,padding=1),
                 #nn.BatchNorm2d(32),
                 nn.ReLU(),
-                nn.Conv2d(in_channels=32,out_channels=32 ,kernel_size=3 , stride=1 ,padding=1),
-                nn.ReLU(),
+                #nn.Conv2d(in_channels=32,out_channels=32 ,kernel_size=3 , stride=1 ,padding=1),
+                #nn.ReLU(),
                 nn.MaxPool2d(kernel_size=2, stride=2))
         self.conv3 = nn.Sequential(
                 nn.Conv2d(in_channels=32,out_channels=64 ,kernel_size=3 , stride=1 ,padding=1),
                 #nn.BatchNorm2d(64),
                 nn.ReLU(),
-                nn.Conv2d(in_channels=64,out_channels=64 ,kernel_size=3 , stride=1 ,padding=1),
-                nn.ReLU(),
-                nn.Conv2d(in_channels=64,out_channels=64 ,kernel_size=3 , stride=1 ,padding=1),
-                nn.ReLU(),
+                #nn.Conv2d(in_channels=64,out_channels=64 ,kernel_size=3 , stride=1 ,padding=1),
+                #nn.ReLU(),
+                #nn.Conv2d(in_channels=64,out_channels=64 ,kernel_size=3 , stride=1 ,padding=1),
+                #nn.ReLU(),
                 nn.MaxPool2d(kernel_size=2, stride=2))
         #self.conv4 = nn.Sequential(
         #        nn.Conv2d(64,128,3,1,1),
@@ -162,6 +184,9 @@ print("\nTraining Model...")
 for epoch in range(num_epoch):
         for i, x_train, y_train in tr_dataloader:
                 #print(x_train.shape, y_train.shape)
+                print("i = ", i)
+                print("x_train =", x_train)
+                print("y_train =", y_train)
                 if torch.cuda.is_available():
                         input = Variable(x_train.float(), requires_grad=True).cuda()
                         target = Variable(y_train).cuda()
@@ -217,8 +242,9 @@ for i,x_test,y_test in ts_dataloader:
 #       ts_loss += loss.item()
         ts_total += len(x_test)
         ts_correct += torch.sum(pred == target.data)
-print("pred:", pred)
-print("label",target)
+        print("pred:", pred)
+        print("y_test = ",y_test)
+        print("label",target)
 
 #print(ts_total)
 #print(ts_correct)
