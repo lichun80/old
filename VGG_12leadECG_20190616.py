@@ -42,7 +42,7 @@ np_img = np.load('/home/desktop/thesis/patient_lead.npy')
 x = np_img
 y = np_label
 
-np.random.seed(1)
+np.random.seed(7)
 s = np.arange(x.shape[0])
 np.random.shuffle(s)
 x = x[s]
@@ -59,31 +59,33 @@ for train_index, test_index in kf.split(x):
     x_train ,x_test = x[train_index],x[test_index]
     y_train ,y_test = y[train_index],y[test_index]
 
-#print(x_train.shape)         #(1778,1,12,5000)
-#print(x.shape)          #(762,1,12,5000)
-#print(y_train.shape)         #(1778,)
-#print(y_test.shape)          #(762,)
+#print(x_train.shape)         
+#print(x_test.shape)          
+#print(y_train.shape)         
+#print(y_test.shape)          
 #print("x_train = ", x_train)
 #print("y_train = ", y_train)
+
 
 ##################################################################
 ## Hyper Parameters
 Batch_size = 32
-learning_rate = 0.001
-num_epoch = 100
+learning_rate = 0.0001
+num_epoch = 300
 
 ##  Dataset
 class ecg_dataset(Dataset):
     def __init__(self,x,y,transform=None):   #initial processes,reading data
-      super(ecg_dataset, self).__init__()
-      self.x = x
-      self.y = y
+        super(ecg_dataset, self).__init__()
+        self.x = x
+        self.y = y
 
     def __getitem__ (self, idx):       #return one item on the index 
-      return idx, self.x[idx], self.y[idx]
+        return idx, self.x[idx], self.y[idx]
+      
 
     def __len__(self):   #return the data length
-      return len(self.x)
+        return len(self.x)
 
 ## DataLoader
 tr_dataset = ecg_dataset(x_train,y_train)
@@ -96,65 +98,78 @@ ts_dataloader = DataLoader(ts_dataset, Batch_size,shuffle=False)
 #print(next(iter(tr_dataloader)))
 #print(next(iter(ts_dataloader)))
 
+
 # Define  Model
-class CNN(torch.nn.Module):
-        def __init__(self):
-                super(CNN, self).__init__()
-                self.conv1 = nn.Sequential(
-                        nn.Conv2d(in_channels=1,out_channels=16 ,kernel_size=3 , stride=1 ,padding=1),
-                        nn.InstanceNorm2d(16),
-                        nn.ReLU(),
-                        nn.MaxPool2d(kernel_size=2, stride=2))
-                self.conv2 = nn.Sequential(
-                        nn.Conv2d(in_channels=16,out_channels=32 ,kernel_size=3 , stride=1 ,padding=1),
-                        nn.InstanceNorm2d(32),
-                        nn.ReLU(),
-                        nn.MaxPool2d(kernel_size=2, stride=2))
-                self.conv3 = nn.Sequential(
-                        nn.Conv2d(in_channels=32,out_channels=64 ,kernel_size=3 , stride=1 ,padding=1),
-                        nn.InstanceNorm2d(64),
-                        nn.ReLU(),
-                        nn.MaxPool2d(kernel_size=2, stride=2))
+class VGG(nn.Module):
+    def __init__(self):
+        super(VGG, self).__init__()
+        self.features = nn.Sequential(
+            nn.Conv2d(in_channels=1, out_channels=64, kernel_size=3, padding=1),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(in_channels=64, out_channels=64, kernel_size=3, padding=1),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+            nn.Conv2d(in_channels=64, out_channels=128, kernel_size=3, padding=1),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(in_channels=128, out_channels=128, kernel_size=3, padding=1),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+            nn.Conv2d(in_channels=128, out_channels=256, kernel_size=3, padding=1),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(in_channels=256, out_channels=256, kernel_size=3, padding=1),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(in_channels=256, out_channels=256, kernel_size=3, padding=1),
+            nn.ReLU(inplace=True),      
+            nn.MaxPool2d(kernel_size=2, stride=2),
+            nn.Conv2d(in_channels=256, out_channels=512, kernel_size=3, padding=1),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(in_channels=512, out_channels=512, kernel_size=3, padding=1),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(in_channels=512, out_channels=512, kernel_size=3, padding=1),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(kernel_size=2, stride=2))
+            # nn.Conv2d(in_channels=512, out_channels=512, kernel_size=3, padding=1),
+            # nn.ReLU(inplace=True),
+            # nn.Conv2d(in_channels=512, out_channels=512, kernel_size=3, padding=1),
+            # nn.ReLU(inplace=True),
+            # nn.Conv2d(in_channels=512, out_channels=512, kernel_size=3, padding=1),
+            # nn.ReLU(inplace=True),     
+            # nn.MaxPool2d(kernel_size=2, stride=2))      
 
-                self.dense = torch.nn.Sequential(
-                        nn.Linear(40000,2))
-        
-        def forward(self,x):
-                #print(x.shape)
-                x = self.conv1(x)
-                #print(x.shape)
-                x = self.conv2(x)
-                #print(x.shape)
-                x = self.conv3(x)
-                #print(x.shape)
-                #x = self.conv4(x)
-                #fc_input = x.view(x.size(0),-1)  #reshape tensor
-                fc_input = x.view(x.size(0),-1)  #reshape tensor
-                #out = out.reshape(out.size(0), -1)
-                #print(fc_input.shape)
-                fc_output = self.dense(fc_input)
-                fc_output = self.dropout(fc_output)
-                #print(fc_output.shape)
-                return fc_output
+        self.classifier = nn.Sequential(
+            nn.Linear(159744, 1024),
+            nn.ReLU(True),
+            nn.Dropout(p=0.5),
+            nn.Linear(1024,1024),
+            nn.ReLU(True),
+            nn.Dropout(p=0.5),
+            nn.Linear(1024,2)
+        )
 
+    def forward(self, x):
+        x = self.features(x)
+        x = x.view(x.size(0), -1)
+        x = self.classifier(x)
+        return x
 
 
 if torch.cuda.is_available():
-        model = CNN().cuda()
+        model = VGG().cuda()
 else:
-        model = CNN()
+        model = VGG()
 
 #print(model)
 
 
 ## Loss Function & Optimization
 criterion = torch.nn.CrossEntropyLoss()
-optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+optimizer = torch.optim.Adam(model.parameters(True), lr=learning_rate)
 
 ## Training Model
 total_step = len(tr_dataloader)
 tr_total = 0
 tr_correct = 0
+tr_loss = 0.0
 print("\nTraining Model...")
 for epoch in range(num_epoch):
         for i, x_train, y_train in tr_dataloader:
@@ -168,10 +183,8 @@ for epoch in range(num_epoch):
                 else:
                         input = Variable(x_train.float(), requires_grad=True)
                         target = Variable(y_train)
-                #print(input)
-                #print(target)
-                output = model(input)
                 
+                output = model(input)
                 loss = criterion(output,target)
                 _,pred = torch.max(output.data,1)
                 #print("out", out.shape, "\n", out)
@@ -180,18 +193,19 @@ for epoch in range(num_epoch):
                 optimizer.zero_grad()
                 loss.backward()
                 optimizer.step()
-                #tr_loss += loss.item()
+                tr_loss += loss.item()
                 tr_total += len(x_train)
                 tr_correct += torch.sum(pred == target)
-
-#       if (i+1) % 100  == 0:
-#           print("Epoch:[{}/{}], Step[{}/{}], Loss:{:.4f}".format(epoch+1,num_epoch, i+1, total_step, loss.item())
-#           print("Train Accuracy is :{:.4f}".format(tr_correct.cpu().numpy()/np.int(tr_total)))
-
+                
+                #if (i+1) % 50  == 0:
+                #        print("Epoch:[{}/{}], Step[{}/{}], Loss:{:.4f}".format(epoch+1,num_epoch, i+1, total_step, tr_loss))
+                #        print("Train Accuracy is :{:.4f}".format(tr_correct.cpu().numpy()/np.int(tr_total)))
+        
 #print(tr_total)
 #print(tr_correct)
+#        print("Loss is:{:.4f}, Train Accurary is:{:.4F}%".format(loss/(len(data), 100*loss/len(data))))
+        
 print("Train Accurary:",tr_correct.cpu().numpy()/np.int(tr_total))
-
 
 #############################################################
 print("\nTesting Model...")
