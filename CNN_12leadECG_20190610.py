@@ -70,7 +70,7 @@ for train_index, test_index in kf.split(x):
 ## Hyper Parameters
 Batch_size = 32
 learning_rate = 0.001
-num_epoch = 100
+num_epochs = 30
 
 ##  Dataset
 class ecg_dataset(Dataset):
@@ -115,6 +115,17 @@ class CNN(torch.nn.Module):
                         nn.InstanceNorm2d(64),
                         nn.ReLU(),
                         nn.MaxPool2d(kernel_size=2, stride=2))
+                self.conv4 = nn.Sequential(
+                        nn.Conv2d(in_channels=64,out_channels=128 ,kernel_size=3 , stride=1 ,padding=1),
+                        nn.InstanceNorm2d(128),
+                        nn.ReLU(),
+                        nn.MaxPool2d(kernel_size=2, stride=2))
+                self.conv5 = nn.Sequential(
+                        nn.Conv2d(in_channels=128,out_channels=256 ,kernel_size=3 , stride=1 ,padding=1),
+                        nn.InstanceNorm2d(256),
+                        nn.ReLU(),
+                        nn.MaxPool2d(kernel_size=2, stride=2))
+
 
                 self.dense = torch.nn.Sequential(
                         nn.Linear(40000,2))
@@ -127,13 +138,14 @@ class CNN(torch.nn.Module):
                 #print(x.shape)
                 x = self.conv3(x)
                 #print(x.shape)
-                #x = self.conv4(x)
-                #fc_input = x.view(x.size(0),-1)  #reshape tensor
+                x = self.conv4(x)
+                #print(x.shape)
+                x = self.conv5(x)
+                #print(x.shape)
+
                 fc_input = x.view(x.size(0),-1)  #reshape tensor
-                #out = out.reshape(out.size(0), -1)
                 #print(fc_input.shape)
                 fc_output = self.dense(fc_input)
-                fc_output = self.dropout(fc_output)
                 #print(fc_output.shape)
                 return fc_output
 
@@ -151,12 +163,16 @@ else:
 criterion = torch.nn.CrossEntropyLoss()
 optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 
+## early stop
+loss_history = []
+count = 0
+
 ## Training Model
 total_step = len(tr_dataloader)
 tr_total = 0
 tr_correct = 0
 print("\nTraining Model...")
-for epoch in range(num_epoch):
+for epoch in range(num_epochs):
         for i, x_train, y_train in tr_dataloader:
                 #print(x_train.shape, y_train.shape)
                 #print("i = ", i)
@@ -168,29 +184,39 @@ for epoch in range(num_epoch):
                 else:
                         input = Variable(x_train.float(), requires_grad=True)
                         target = Variable(y_train)
-                #print(input)
-                #print(target)
+                #print(input.shape)
+                #print(target.shape)
+                
                 output = model(input)
                 
                 loss = criterion(output,target)
                 _,pred = torch.max(output.data,1)
-                #print("out", out.shape, "\n", out)
+                #print("output", output.shape, "\n", output)
                 #print("target", target.shape, "\n", target)
                 #print("pred", pred.shape, "\n", pred)
-                optimizer.zero_grad()
-                loss.backward()
-                optimizer.step()
-                #tr_loss += loss.item()
-                tr_total += len(x_train)
-                tr_correct += torch.sum(pred == target)
+                optimizer.zero_grad()  #reset gradients
+                loss.backward()        #backward pass
+                optimizer.step()       #update parameters
+                tr_loss = loss.item()
+                _,pred = torch.max(output.data,1)
+                tr_total += target.size(0)
+                tr_correct += (pred == target).sum().item()
 
-#       if (i+1) % 100  == 0:
-#           print("Epoch:[{}/{}], Step[{}/{}], Loss:{:.4f}".format(epoch+1,num_epoch, i+1, total_step, loss.item())
-#           print("Train Accuracy is :{:.4f}".format(tr_correct.cpu().numpy()/np.int(tr_total)))
+        if (epoch + 1) % 5 == 0:
+                print('num_epochs [{}/{}], Loss: {:.4f}'.format(epoch+1, num_epochs, tr_loss))
 
-#print(tr_total)
-#print(tr_correct)
-print("Train Accurary:",tr_correct.cpu().numpy()/np.int(tr_total))
+
+        loss_history.append(tr_loss)
+        num_early_stop = 5
+        if(num_early_stop>0):
+                if(len(loss_history)>1 and loss_history[-1]>loss_history[-2]):
+                    count += 1
+                    if count>num_early_stop:
+                        break
+
+
+#print("Train Accurary:",tr_correct.cpu().numpy()/len(tr_dataset))
+print("Train Accurary: {:.4f} %".format(100*tr_correct/tr_total))
 
 
 #############################################################
@@ -214,13 +240,39 @@ for i,x_test,y_test in ts_dataloader:
 #       print(out.data)
         _,pred = torch.max(output.data,1)
 #       print(pred)
-#       ts_loss += loss.item()
-        ts_total += len(x_test)
-        ts_correct += torch.sum(pred == target.data)
-        print("pred:", pred)
-        print("label",target)
+        ts_loss = loss.item()
+        ts_total += target.size(0)
+        ts_correct += (pred == target).sum().item()
 
-#print(ts_total)
-#print(ts_correct)
-print("Test Accurary:",ts_correct.cpu().numpy()/np.int(ts_total))
+        if (epoch + 1) % 5 == 0:
+                print('num_epochs [{}/{}], Loss: {:.4f}'.format(epoch+1, num_epochs, ts_loss))
+                #print("pred",pred)
+                #print("targer",target)
 
+#print("Test Accurary:",100*ts_correct.cpu().numpy()/np.int(ts_total))
+print("Test Accurary: {:.4f} %".format(100*ts_correct/ts_total))
+
+exit()
+
+
+def plot_acc_loss(tr_loss, ts_loss, tr_acc, ts_acc):
+    
+    # loss
+    plt.figure(figsize=(20,6))
+    plt.title('Learning Curve')
+    plt.xlabel('num_epochs')
+    plt.ylabel('crossentropy')
+    plt.plot(tr_loss, label = 'training loss')
+    plt.plot(ts_loss, label = 'test loss')
+    plt.legend()
+    plt.show()
+
+    # accuracy
+    plt.figure(figsize=(20,6))
+    plt.title('Accuracy')
+    plt.xlabel('num_epochs')
+    plt.ylabel('Accuracy')
+    plt.plot(tr_acc, label = 'training acc')
+    plt.plot(ts_acc, label = 'test acc')
+    plt.legend()
+    plt.show()

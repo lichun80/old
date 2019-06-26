@@ -99,115 +99,72 @@ ts_dataloader = DataLoader(ts_dataset, Batch_size,shuffle=False)
 #print(next(iter(ts_dataloader)))
 
 
+#print(x.shape)
+#x = x.squeeze(x,1)
+#print(x.shape)
+
+
 # Define  Model
-class VGG(nn.Module):
+class LSTM(nn.Module):
     def __init__(self):
-        super(VGG, self).__init__()
-        self.features = nn.Sequential(
-            nn.Conv2d(in_channels=1, out_channels=64, kernel_size=3, padding=1),
-            #nn.BatchNorm2d(64),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(in_channels=64, out_channels=64, kernel_size=3, padding=1),
-            #nn.BatchNorm2d(64),
-            nn.ReLU(inplace=True),
-            nn.MaxPool2d(kernel_size=2, stride=2),
-            nn.Conv2d(in_channels=64, out_channels=128, kernel_size=3, padding=1),
-            #nn.BatchNorm2d(128),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(in_channels=128, out_channels=128, kernel_size=3, padding=1),
-            #nn.BatchNorm2d(128),
-            nn.ReLU(inplace=True),
-            nn.MaxPool2d(kernel_size=2, stride=2),
-            nn.Conv2d(in_channels=128, out_channels=256, kernel_size=3, padding=1),
-            #nn.BatchNorm2d(256),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(in_channels=256, out_channels=256, kernel_size=3, padding=1),
-            #nn.BatchNorm2d(256),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(in_channels=256, out_channels=256, kernel_size=3, padding=1),
-            #nn.BatchNorm2d(256),
-            nn.ReLU(inplace=True),      
-            nn.MaxPool2d(kernel_size=2, stride=2),
-            nn.Conv2d(in_channels=256, out_channels=512, kernel_size=3, padding=1),
-            #nn.BatchNorm2d(512),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(in_channels=512, out_channels=512, kernel_size=3, padding=1),
-            #nn.BatchNorm2d(512),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(in_channels=512, out_channels=512, kernel_size=3, padding=1),
-            #nn.BatchNorm2d(512),
-            nn.ReLU(inplace=True),
-            nn.MaxPool2d(kernel_size=2, stride=2))
-            # nn.Conv2d(in_channels=512, out_channels=512, kernel_size=3, padding=1),
-            # nn.ReLU(inplace=True),
-            # nn.Conv2d(in_channels=512, out_channels=512, kernel_size=3, padding=1),
-            # nn.ReLU(inplace=True),
-            # nn.Conv2d(in_channels=512, out_channels=512, kernel_size=3, padding=1),
-            # nn.ReLU(inplace=True),     
-            # nn.MaxPool2d(kernel_size=2, stride=2))      
-
-        self.classifier = nn.Sequential(
-            nn.Linear(159744, 1024),
-            nn.ReLU(True),
-            nn.Dropout(p=0.5),
-            nn.Linear(1024,1024),
-            nn.ReLU(True),
-            nn.Dropout(p=0.5),
-            nn.Linear(1024,2)
-        )
-
+        super(LSTM, self).__init__()
+        self.conv = nn.Conv1d()
+        self.rnn = nn.LSTM(input_size=5000,hidden_size=128,num_layers=2,batch_first=True,dropout=0.5,)
+        self.dense = nn.Linear(128,2)
+          
+ 
     def forward(self, x):
-        x = self.features(x)
-        x = x.view(x.size(0), -1)
-        x = self.classifier(x)
-        return x
+        # x shape (batch, time_step, input_size)
+        # r_out shape (batch, time_step, output_size)
+        # h_n shape (n_layers, batch, hidden_size)  
+        # h_c shape (n_layers, batch, hidden_size)
+        r_out, (h_n, h_c) = self.rnn(x, None)
+
+        out = self.dense(r_out[:, -1, :])
+        return out
 
 
 if torch.cuda.is_available():
-        model = VGG().cuda()
+        model = LSTM().cuda()
 else:
-        model = VGG()
+        model = LSTM()
 
-#print(model)
-
+print(model)
 
 ## Loss Function & Optimization
 criterion = torch.nn.CrossEntropyLoss()
 optimizer = torch.optim.Adam(model.parameters(True), lr=learning_rate)
 
 ## early stop
-#loss_history = []
-#count = 0
-
+loss_history = []
+count = 0
 
 ## Training Model
+model.train()
 total_step = len(tr_dataloader)
 tr_total = 0
 tr_correct = 0
 tr_loss = 0.0
+tr_acc = 0.0
 print("\nTraining Model...")
 for epoch in range(num_epochs):
-        for i, x_train, y_train in tr_dataloader:
-                #print(x_train.shape, y_train.shape)
-                #print("i = ", i)
-                #print("x_train =", x_train)
-                #print("y_train =", y_train)
+        i = 0
+        for i,x_train, y_train in (tr_dataloader):
                 if torch.cuda.is_available():
                         input = Variable(x_train.float(), requires_grad=True).cuda()
                         target = Variable(y_train).cuda()
                 else:
                         input = Variable(x_train.float(), requires_grad=True)
-                        target = Variable(y_train)
-                
+                        target = Variable(y_train)                
+                input = input.reshape(-1,12,5000)
                 output = model(input)
                 loss = criterion(output,target)
-                _,pred = torch.max(output.data,1)
                 #print("out", out.shape, "\n", out)
                 #print("target", target.shape, "\n", target)
                 #print("pred", pred.shape, "\n", pred)
-                optimizer.zero_grad()
-                loss.backward()
-                optimizer.step()
+                optimizer.zero_grad()  #reset gradients
+                loss.backward()        #backward pass
+                optimizer.step()       #update parameters
                 tr_loss = loss.item()
                 _,pred = torch.max(output.data,1)
                 tr_total += target.size(0)
@@ -216,17 +173,18 @@ for epoch in range(num_epochs):
         if (epoch + 1) % 5 == 0:
                 print('num_epochs [{}/{}], Loss: {:.4f}'.format(epoch+1, num_epochs, tr_loss))
 
+        loss_history.append(tr_loss)
+        num_early_stop = 5
+        if(num_early_stop>0):
+                if(len(loss_history)>1 and loss_history[-1]>loss_history[-2]):
+                    count += 1
+                    if count>num_early_stop:
+                        break
 
-        # loss_history.append(tr_loss)
-        # num_early_stop = 5
-        # if(num_early_stop>0):
-        #         if(len(loss_history)>1 and loss_history[-1]>loss_history[-2]):
-        #             count += 1
-        #             if count>num_early_stop:
-        #                 break
 
 #print("Train Accurary:",tr_correct.cpu().numpy()/len(tr_dataset))
 print("Train Accurary: {:.4f} %".format(100*tr_correct/tr_total))
+
 
 #############################################################
 print("\nTesting Model...")
@@ -236,7 +194,7 @@ model.eval()
 ts_total = 0
 ts_correct = 0
 #for epoch in range(num_epochs):
-for i,x_test,y_test in ts_dataloader:
+for i,x_test,y_test in (ts_dataloader):
         if torch.cuda.is_available():
                 input  = Variable(x_test.float()).cuda()
                 target  = Variable(y_test).cuda()
@@ -244,22 +202,20 @@ for i,x_test,y_test in ts_dataloader:
                 input = Variable(x_test.float())
                 target = Variable(y_test)
 
+        input = input.reshape(-1,12,5000)
         output = model(input)
         loss = criterion(output,target)
-#       print(out.data)
         _,pred = torch.max(output.data,1)
-#       print(pred)
-#       ts_loss += loss.item()
         ts_loss = loss.item()
         ts_total += target.size(0)
         ts_correct += (pred == target).sum().item()
 
+        print("pred",pred)
+        print("targer",target)
+
         if (epoch + 1) % 5 == 0:
                 print('num_epochs [{}/{}], Loss: {:.4f}'.format(epoch+1, num_epochs, ts_loss))
-                #print("pred",pred)
-                #print("targer",target)
 
 #print("Test Accurary:",100*ts_correct.cpu().numpy()/np.int(ts_total))
 print("Test Accurary: {:.4f} %".format(100*ts_correct/ts_total))
-
 
