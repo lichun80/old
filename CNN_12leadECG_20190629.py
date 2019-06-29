@@ -51,27 +51,25 @@ y = y[s]
 
 #print(x)
 #print(y)
-#x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.1)
+#x_train, x_val, y_train, y_val = train_test_split(x, y, test_size=0.1)
 
 kf = KFold(n_splits=10)
 #
-for train_index, test_index in kf.split(x):
-    #print("Trian:",train_index ,"test:",test_index)
-    x_train ,x_test = x[train_index],x[test_index]
-    y_train ,y_test = y[train_index],y[test_index]
+for train_index, val_index in kf.split(x):
+    #print("Trian:",train_index ,"val:",val_index)
+    x_train ,x_val = x[train_index],x[val_index]
+    y_train ,y_val = y[train_index],y[val_index]
 
 #print(x_train.shape)         #(2286,1,12,5000)
 #print(x_test.shape)          
 #print(y_train.shape)         #(2286,)
 #print(y_test.shape)          
-#print("x_train = ", x_train)
-#print("y_train = ", y_train)
 
 ##################################################################
 ## Hyper Parameters
 Batch_size = 64
 learning_rate = 0.001
-num_epochs = 300
+num_epochs = 100
 
 ##  Dataset
 class ecg_dataset(Dataset):
@@ -88,14 +86,14 @@ class ecg_dataset(Dataset):
 
 ## DataLoader
 tr_dataset = ecg_dataset(x_train,y_train)
-ts_dataset = ecg_dataset(x_test,y_test)
+tv_dataset = ecg_dataset(x_val,y_val)
 tr_dataloader = DataLoader(tr_dataset, Batch_size,shuffle=True)
-ts_dataloader = DataLoader(ts_dataset, Batch_size,shuffle=False)
+tv_dataloader = DataLoader(tv_dataset, Batch_size,shuffle=False)
 
 #print(tr_dataset.__len__())
-#print(len(ts_dataset))
+#print(len(tv_dataset))
 #print(next(iter(tr_dataloader)))
-#print(next(iter(ts_dataloader)))
+#print(next(iter(tv_dataloader)))
 
 # Define  Model
 class CNN(torch.nn.Module):
@@ -215,9 +213,10 @@ for epoch in range(num_epochs):
                 _,pred = torch.max(output.data,1)
                 tr_total += target.size(0)
                 tr_correct += (pred == target).sum().item()
-              
-        if (epoch + 1) % 50 == 0:
+
+        if (epoch + 1) % 5 == 0:
                 print('num_epochs [{}/{}], Loss: {:.4f}'.format(epoch+1, num_epochs, tr_loss))
+
 
         # loss_history.append(tr_loss)
         # num_early_stop = 5
@@ -232,10 +231,8 @@ for epoch in range(num_epochs):
 
 print("Train Accurary: {:.4f} %".format(100*tr_correct/tr_total))
 
-
 confusion = confusion_matrix(target.cpu(), pred.cpu())
 print("Confusion Maxtrix", confusion)
-
 # True Positives
 TP = confusion[1, 1]
 # True Negatives
@@ -245,40 +242,39 @@ FP = confusion[0, 1]
 # False Negatives
 FN = confusion[1, 0]
 
-
 print("Train Sensitivity : {:.4f} %".format(100* TP / float(TP + FN)))
 print("Train Specificity : {:.4f} %".format(100* TN / float(TN + FP)))
 
 #############################################################
-print("\nTesting Model...")
-## Testing Model
+print("\nVailding Model...")
+## Vailding Model
 model.eval()
-ts_total = 0
-ts_correct = 0
+tv_total = 0
+tv_correct = 0
 #for epoch in range(num_epoch):
-for i,x_test,y_test in ts_dataloader:
+for i,x_val,y_val in tv_dataloader:
         if torch.cuda.is_available():
-                input  = Variable(x_test.float()).cuda()
-                target  = Variable(y_test).cuda()
+                input  = Variable(x_val.float()).cuda()
+                target  = Variable(y_val).cuda()
         else:
-                input = Variable(x_test.float())
-                target = Variable(y_test)
+                input = Variable(x_val.float())
+                target = Variable(y_val)
 
         output = model(input)
         loss = criterion(output,target)
         _,pred = torch.max(output.data,1)
 #       print(pred)
-        ts_loss = loss.item()
-        ts_total += target.size(0)
-        ts_correct += (pred == target).sum().item()
+        tv_loss = loss.item()
+        tv_total += target.size(0)
+        tv_correct += (pred == target).sum().item()
 
         #if (epoch + 1) % 5 == 0:
-        print('num_epochs [{}/{}], Loss: {:.4f}'.format(epoch+1, num_epochs, ts_loss))
+        print('num_epochs [{}/{}], Loss: {:.4f}'.format(epoch+1, num_epochs, tv_loss))
         #print("pred",pred)
         #print("targer",target)
 
-#print("Test Accurary:",100*ts_correct.cpu().numpy()/np.int(ts_total))
-print("Test Accurary: {:.4f} %".format(100*ts_correct/ts_total))
+#print("Vaild Accurary:",100*ts_correct.cpu().numpy()/np.int(ts_total))
+print("Vaild Accurary: {:.4f} %".format(100*tv_correct/tv_total))
 
 ## Cofusion Matrix
 confusion = confusion_matrix(target.cpu(), pred.cpu())
@@ -293,31 +289,5 @@ FP = confusion[0, 1]
 # False Negatives
 FN = confusion[1, 0]
 
-print("Test Sensitivity : {:.4f} %".format(100* TP / float(TP + FN)))
-print("Test Specificity : {:.4f} %".format(100* TN / float(TN + FP)))
-
-
-exit()
-
-
-def plot_acc_loss(tr_loss, ts_loss, tr_acc, ts_acc):
-    
-    # loss
-    plt.figure(figsize=(20,6))
-    plt.title('Learning Curve')
-    plt.xlabel('num_epochs')
-    plt.ylabel('crossentropy')
-    plt.plot(tr_loss, label = 'training loss')
-    plt.plot(ts_loss, label = 'test loss')
-    plt.legend()
-    plt.show()
-
-    # accuracy
-    plt.figure(figsize=(20,6))
-    plt.title('Accuracy')
-    plt.xlabel('num_epochs')
-    plt.ylabel('Accuracy')
-    plt.plot(tr_acc, label = 'training acc')
-    plt.plot(ts_acc, label = 'test acc')
-    plt.legend()
-    plt.show()
+print("Vaild Sensitivity : {:.4f} %".format(100* TP / float(TP + FN)))
+print("Vaild Specificity : {:.4f} %".format(100* TN / float(TN + FP)))
